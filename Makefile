@@ -1,15 +1,41 @@
 CC = gcc
-CFLAGS = -Wall -Iinclude
+CFLAGS = -Wall -Iinclude -Isrc
 
-SRC = src/aes.c src/utils.c src/keygen.c test/test_crypto.c
-OBJ = $(SRC:.c=.o)
+BUILD_DIR = build
+BIN_DIR = bin
 
-TARGET = test_crypto
+SRC_COMMON = src/aes.c src/utils.c src/keygen.c
+TEST_SRC = test/test_crypto.c
+CHAT_SRC = test/chat_simulator.c
 
-all: $(TARGET)
+# Generate object lists with proper prefixes
+TEST_OBJ = $(addprefix $(BUILD_DIR)/, $(notdir $(SRC_COMMON:.c=.o) $(TEST_SRC:.c=.o)))
+CHAT_OBJ = $(addprefix $(BUILD_DIR)/, $(notdir $(SRC_COMMON:.c=.o) $(CHAT_SRC:.c=.o)))
 
-$(TARGET): $(OBJ)
+TEST_TARGET = $(BIN_DIR)/test_crypto
+CHAT_TARGET = $(BIN_DIR)/chat_simulator
+
+all: $(TEST_TARGET) $(CHAT_TARGET)
+
+# Target for test_crypto
+$(TEST_TARGET): $(TEST_OBJ) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^
 
+# Target for chat_simulator
+$(CHAT_TARGET): $(CHAT_OBJ) | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# Pattern rule for src files
+$(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Pattern rule for test files
+$(BUILD_DIR)/%.o: test/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Ensure build and bin directories exist
+$(BUILD_DIR) $(BIN_DIR):
+	mkdir -p $@
+
 clean:
-	rm -f $(TARGET) src/*.o test/*.o
+	rm -rf $(BUILD_DIR) $(BIN_DIR)
