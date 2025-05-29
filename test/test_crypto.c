@@ -1,41 +1,60 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 #include "crypto.h"
 
-int main() {
-    char password[128];
-    char plaintext[128];
-
-    printf("Enter a 16-character plaintext: ");
-    fgets(plaintext, sizeof(plaintext), stdin);
-    plaintext[strcspn(plaintext, "\n")] = 0;  // remove newline
-
-    if (strlen(plaintext) != 16) {
-        printf("Error: Plaintext must be exactly 16 characters.\n");
-        return 1;
-    }
-    printf("Enter password: ");
-    fgets(password, sizeof(password), stdin);
-    password[strcspn(password, "\n")] = 0;  // remove newline
-
-    uint8_t key[16];
-    uint8_t encrypted[16];
-    uint8_t decrypted[16];
-
-    key_from_password(password, key);
-
-    aes_encrypt((uint8_t *)plaintext, key, encrypted);
-
-    printf("\nEncrypted (hex): ");
-    for (int i = 0; i < 16; i++) {
-        printf("%02X ", encrypted[i]);
+void print_hex(const char *label, uint8_t *data, size_t len) {
+    printf("%s: ", label);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02X ", data[i]);
     }
     printf("\n");
+}
 
-    aes_decrypt(encrypted, key, decrypted);
-    printf("Decrypted text: %.*s\n", 16, decrypted);
+int main() {
+    char plaintext_input[1024];
 
+    printf("Enter a message (up to 1023 characters): ");
+    fgets(plaintext_input, sizeof(plaintext_input), stdin);
+    plaintext_input[strcspn(plaintext_input, "\n")] = 0;
+
+    // Derive key from first 16 bytes of the message
+    char keysource[17] = {0}; // 16 bytes + null terminator
+    strncpy(keysource, plaintext_input, 16);
+    uint8_t key[16];
+    key_from_password(keysource, key);
+
+    // Padding to a multiple of 16
+    size_t input_len = strlen(plaintext_input);
+    size_t padded_len = (input_len % 16 == 0) ? input_len : (input_len + (16 - (input_len % 16)));
+
+    uint8_t *plaintext = calloc(padded_len, 1);
+    uint8_t *encrypted = calloc(padded_len, 1);
+    uint8_t *decrypted = calloc(padded_len, 1);
+    memcpy(plaintext, plaintext_input, input_len);  // null-padded
+
+    // Show info
+    printf("\nOriginal plaintext: '%s'\n", plaintext_input);
+    print_hex("Derived key", key, 16);
+
+    // Encrypt block-by-block
+    for (size_t i = 0; i < padded_len; i += 16) {
+        aes_encrypt(plaintext + i, key, encrypted + i);
+    }
+    print_hex("Encrypted (hex)", encrypted, padded_len);
+
+    // Decrypt
+    for (size_t i = 0; i < padded_len; i += 16) {
+        aes_decrypt(encrypted + i, key, decrypted + i);
+    }
+    print_hex("Decrypted (hex)", decrypted, padded_len);
+
+    printf("Decrypted text: '%.*s'\n", (int)padded_len, decrypted);
+
+    free(plaintext);
+    free(encrypted);
+    free(decrypted);
     return 0;
 }
 
